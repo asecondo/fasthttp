@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -80,6 +81,13 @@ type Request struct {
 	// By default redirect path values are normalized, i.e.
 	// extra slashes are removed, special characters are encoded.
 	DisableRedirectPathNormalizing bool
+
+	// TODO (NOW): fasthttp doesn't suppport contexts natively with their client calls, so we'll
+	//  need to wire this in somehow. We will likely need some new function to allow users to pass
+	//  in a context themselves, as well as documentation to let people know that if they want
+	//  tracing to work between this component and others that they may be using, they'll need to
+	//  update their plumbing and use whatever new functions that we expose.
+	ctx context.Context
 }
 
 // Response represents HTTP response.
@@ -2458,4 +2466,12 @@ func readCrLf(r *bufio.Reader) error {
 //	c.DoTimeout(&req, &resp, t)
 func (req *Request) SetTimeout(t time.Duration) {
 	req.timeout = t
+}
+
+func (req *Request) SetContext(ctx context.Context) {
+	req.ctx = ctx
+}
+
+func (req *Request) Context() context.Context {
+	return req.ctx
 }
