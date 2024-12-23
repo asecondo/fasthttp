@@ -1,6 +1,7 @@
 package otel
 
 import (
+	"github.com/valyala/fasthttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
@@ -11,11 +12,14 @@ const (
 )
 
 type config struct {
-	Propagators    propagation.TextMapPropagator
-	Tracer         trace.Tracer
-	TracerProvider trace.TracerProvider
+	Propagators       propagation.TextMapPropagator
+	SpanNameFormatter func(*fasthttp.Request) string
+	SpanStartOptions  []trace.SpanStartOption
+	Tracer            trace.Tracer
+	TracerProvider    trace.TracerProvider
 }
 
+// Option sets the tracing option values.
 type Option interface {
 	apply(*config)
 }
@@ -42,6 +46,7 @@ func newConfig(opts ...Option) *config {
 	return c
 }
 
+// WithTracerProvider sets the tracer provider to use.
 func WithTracerProvider(provider trace.TracerProvider) Option {
 	return optionFunc(func(cfg *config) {
 		if provider != nil {
@@ -50,11 +55,24 @@ func WithTracerProvider(provider trace.TracerProvider) Option {
 	})
 }
 
+// WithPropagators sets the propagators to use.
 func WithPropagators(propagators propagation.TextMapPropagator) Option {
 	return optionFunc(func(cfg *config) {
 		if propagators != nil {
 			cfg.Propagators = propagators
 		}
+	})
+}
+
+func WithSpanNameFormatter(formatter func(*fasthttp.Request) string) Option {
+	return optionFunc(func(cfg *config) {
+		cfg.SpanNameFormatter = formatter
+	})
+}
+
+func WithSpanStartOptions(opts ...trace.SpanStartOption) Option {
+	return optionFunc(func(cfg *config) {
+		cfg.SpanStartOptions = opts
 	})
 }
 

@@ -12,7 +12,8 @@ import (
 type Transport struct {
 	propagators       propagation.TextMapPropagator
 	roundTripper      fasthttp.RoundTripper
-	spanNameFormatter func(string, *fasthttp.Request) string
+	spanNameFormatter func(*fasthttp.Request) string
+	spanStartOptions  []trace.SpanStartOption
 	tracer            trace.Tracer
 }
 
@@ -25,18 +26,48 @@ func NewTransport(base fasthttp.RoundTripper, opts ...Option) *Transport {
 		roundTripper: base,
 	}
 
-	transport.applyConfig(newConfig(opts...))
+	defaultOpts := []Option{
+		WithSpanStartOptions(trace.WithSpanKind(trace.SpanKindClient)),
+		WithSpanNameFormatter(defaultTransportFormatter),
+	}
+
+	config := newConfig(append(defaultOpts, opts...)...)
+	transport.applyConfig(config)
 
 	return &transport
 }
 
 func (t *Transport) applyConfig(c *config) {
 	t.propagators = c.Propagators
+	t.spanNameFormatter = c.SpanNameFormatter
+	t.spanStartOptions = c.SpanStartOptions
 	t.tracer = c.Tracer
 }
 
-func defaultTransportFormatter(_ string, req *fasthttp.Request) string {
-	return "HTTP " + string(req.Header.Method())
+func defaultTransportFormatter(req *fasthttp.Request) string {
+	// Avoid returning '"HTTP " + string(req.Header.Method())' to avoid string allocations.
+	switch b2s(req.Header.Method()) {
+	case "GET":
+		return "HTTP GET"
+	case "POST":
+		return "HTTP POST"
+	case "PUT":
+		return "HTTP PUT"
+	case "DELETE":
+		return "HTTP DELETE"
+	case "PATCH":
+		return "HTTP PATCH"
+	case "HEAD":
+		return "HTTP HEAD"
+	case "OPTIONS":
+		return "HTTP OPTIONS"
+	case "CONNECT":
+		return "HTTP CONNECT"
+	case "TRACE":
+		return "HTTP TRACE"
+	default:
+		return "HTTP"
+	}
 }
 
 func (t *Transport) RoundTrip(
@@ -56,7 +87,7 @@ func (t *Transport) RoundTrip(
 		}
 	}
 
-	ctx, span := tracer.Start(req.Context(), defaultTransportFormatter("", req))
+	ctx, span := tracer.Start(req.Context(), defaultTransportFormatter(req), t.spanStartOptions...)
 	defer span.End()
 
 	carrier := &headerCarrier{
@@ -83,15 +114,15 @@ func setRequestAttributes(span trace.Span, req *fasthttp.Request) {
 	attrs := make([]attribute.KeyValue, 0)
 	attrs = append(
 		attrs,
-		attribute.String("http.request.method", string(req.Header.Method())),
-		attribute.String("user_agent.original", string(req.Header.UserAgent())),
-		attribute.String("server.address", string(req.Host())),
+		attribute.String("http.request.method", b2s(req.Header.Method())),
+		attribute.String("user_agent.original", b2s(req.Header.UserAgent())),
+		attribute.String("server.address", b2s(req.Host())),
 		// TODO (NOW): port isn't explicitly stored. need to parse it from host field, but going to skip for now.
 		// attribute.String("server.port", string(req.Host())),
-		attribute.String("url.full", string(req.URI().FullURI())),
-		attribute.String("url.scheme", string(req.URI().Scheme())),
+		attribute.String("url.full", b2s(req.URI().FullURI())),
+		attribute.String("url.scheme", b2s(req.URI().Scheme())),
 		attribute.String("network.transport", "tcp"),
-		attribute.String("network.protocol.version", string(req.Header.Protocol())),
+		attribute.String("network.protocol.version", b2s(req.Header.Protocol())),
 	)
 	span.SetAttributes(attrs...)
 }
