@@ -2,7 +2,8 @@ package otel
 
 import (
 	"github.com/valyala/fasthttp"
-	"go.opentelemetry.io/otel"
+  semconv "go.opentelemetry.io/otel/semconv/v1.27.0"
+  "go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"
@@ -114,15 +115,15 @@ func setRequestAttributes(span trace.Span, req *fasthttp.Request) {
 	attrs := make([]attribute.KeyValue, 0)
 	attrs = append(
 		attrs,
-		attribute.String("http.request.method", b2s(req.Header.Method())),
-		attribute.String("user_agent.original", b2s(req.Header.UserAgent())),
-		attribute.String("server.address", b2s(req.Host())),
+		semconv.HTTPRequestMethodKey.String(b2s(req.Header.Method())),
+    semconv.UserAgentNameKey.String(b2s(req.Header.UserAgent())),
+    semconv.ServerAddressKey.String(b2s(req.Host())),
 		// TODO (NOW): port isn't explicitly stored. need to parse it from host field, but going to skip for now.
 		// attribute.String("server.port", string(req.Host())),
-		attribute.String("url.full", b2s(req.URI().FullURI())),
-		attribute.String("url.scheme", b2s(req.URI().Scheme())),
-		attribute.String("network.transport", "tcp"),
-		attribute.String("network.protocol.version", b2s(req.Header.Protocol())),
+    semconv.URLFullKey.String(b2s(req.URI().FullURI())),
+    semconv.URLSchemeKey.String(b2s(req.URI().Scheme())),
+    semconv.NetworkTransportKey.String("tcp"),
+		semconv.NetworkProtocolVersionKey.String(b2s(req.Header.Protocol())),
 	)
 	span.SetAttributes(attrs...)
 }
